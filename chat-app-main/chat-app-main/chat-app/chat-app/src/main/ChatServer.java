@@ -12,15 +12,15 @@ public class ChatServer {
     private final int port;
     private final ServerGUI gui;
     private ServerSocket serverSocket;
-    private final AtomicBoolean isRunning = new AtomicBoolean(false); 
-    
-    private final List<ClientHandler> clients = new ArrayList<>(); 
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+
+    private final List<ClientHandler> clients = new ArrayList<>();
 
     public ChatServer(int port, ServerGUI gui) {
         this.port = port;
         this.gui = gui;
     }
-    
+
     public ServerGUI getGui() {
         return gui;
     }
@@ -39,41 +39,44 @@ public class ChatServer {
             while (isRunning.get()) {
                 gui.logMessage("Yeni baglanti bekleniyor...");
                 Socket clientSocket = serverSocket.accept();
-                
-                ClientHandler newClient = new ClientHandler(clientSocket, this);
-                clients.add(newClient); 
-                newClient.start();      
 
-                gui.logMessage("Yeni istemci baglandi: " + clientSocket.getInetAddress().getHostAddress() + ". Toplam istemci: " + clients.size());
+                ClientHandler newClient = new ClientHandler(clientSocket, this);
+                clients.add(newClient);
+                newClient.start();
+
+                gui.logMessage("Yeni istemci baglandi: " + clientSocket.getInetAddress().getHostAddress()
+                        + ". Toplam istemci: " + clients.size());
             }
-        } 
-        catch (IOException e) { 
+        } catch (IOException e) {
             if (isRunning.get()) {
                 gui.logMessage("Sunucu dinleme hatası: " + e.getMessage());
             }
-        } finally { 
+        } finally {
             isRunning.set(false);
             closeServer();
         }
     }
 
     public void stopServer() {
-        if (!isRunning.get()) return;
+        if (!isRunning.get())
+            return;
 
-        isRunning.set(false); 
+        isRunning.set(false);
         gui.logMessage("Sunucu kapatılıyor...");
-        
-        closeServer();
-        
+
+        // Önce tüm client bağlantılarını kapat
         for (ClientHandler client : clients) {
+            client.close();
         }
         clients.clear();
+
+        closeServer();
     }
-    
+
     public boolean isRunning() {
         return isRunning.get();
     }
-    
+
     private void closeServer() {
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {
@@ -85,7 +88,6 @@ public class ChatServer {
         gui.logMessage("Sunucu başarıyla kapatıldı.");
     }
 
-
     public void removeClient(ClientHandler client) {
         clients.remove(client);
         gui.logMessage("İstemci ayrıldı. Kalan istemci: " + clients.size());
@@ -93,13 +95,13 @@ public class ChatServer {
 
     public void handleIncomingMessage(String encryptedMessage, ClientHandler sender) {
         gui.logMessage("Gelen Şifreli Mesaj [" + sender.getClientId() + "]: " + encryptedMessage);
-        
-        broadcast(encryptedMessage); 
+
+        broadcast(encryptedMessage);
     }
-    
+
     public void broadcast(String message) {
         for (ClientHandler client : clients) {
-            client.sendMessage(message); 
+            client.sendMessage(message);
         }
     }
 }
