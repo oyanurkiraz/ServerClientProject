@@ -1,23 +1,29 @@
 package main.encryption;
 
+/**
+ * Affine Şifreleme - İngilizce alfabe (26 harf: A-Z)
+ * E(x) = (ax + b) mod 26
+ * D(y) = a^(-1)(y - b) mod 26
+ */
 public class AffineCipher implements EncryptionAlgorithm {
     private final int a;
     private final int b;
-    private final int m = 26;
+    private static final int M = 26;
 
     public AffineCipher(int a, int b) {
         this.a = a;
-        this.b = b;
+        this.b = b % M;
     }
 
     @Override
     public String encrypt(String plainText) {
-        plainText = plainText.toUpperCase();
         StringBuilder result = new StringBuilder();
         for (char ch : plainText.toCharArray()) {
             if (Character.isLetter(ch)) {
-                int x = ch - 'A';
-                result.append((char) (((a * x + b) % m) + 'A'));
+                char base = Character.isUpperCase(ch) ? 'A' : 'a';
+                int x = Character.toUpperCase(ch) - 'A';
+                int encrypted = (a * x + b) % M;
+                result.append((char) (encrypted + base));
             } else {
                 result.append(ch);
             }
@@ -27,13 +33,15 @@ public class AffineCipher implements EncryptionAlgorithm {
 
     @Override
     public String decrypt(String cipherText) {
-        int a_inv = modInverse(a, m);
+        int a_inv = modInverse(a, M);
         StringBuilder result = new StringBuilder();
-        cipherText = cipherText.toUpperCase();
+
         for (char ch : cipherText.toCharArray()) {
             if (Character.isLetter(ch)) {
-                int y = ch - 'A';
-                result.append((char) (((a_inv * (y - b + m)) % m) + 'A'));
+                char base = Character.isUpperCase(ch) ? 'A' : 'a';
+                int y = Character.toUpperCase(ch) - 'A';
+                int decrypted = (a_inv * (y - b + M)) % M;
+                result.append((char) (decrypted + base));
             } else {
                 result.append(ch);
             }
@@ -42,8 +50,10 @@ public class AffineCipher implements EncryptionAlgorithm {
     }
 
     private int modInverse(int a, int m) {
-        for (int i = 0; i < m; i++) {
-            if ((a * i) % m == 1) return i;
+        a = a % m;
+        for (int i = 1; i < m; i++) {
+            if ((a * i) % m == 1)
+                return i;
         }
         return 1;
     }

@@ -6,6 +6,7 @@ import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.RoundRectangle2D;
+import java.security.PublicKey;
 
 public class ClientGUI extends JFrame {
     private final ChatClient client;
@@ -51,8 +52,19 @@ public class ClientGUI extends JFrame {
 
     private EncryptionAlgorithm selectedAlgorithm;
 
+    // RSA Anahtar Değişimi için
+    private RSACipher myRSA; // Kendi key pair'im
+    private PublicKey peerPublicKey; // Karşı tarafın public key'i
+    private RSACipher rsaForEncrypt; // Şifreleme için (karşı tarafın public key'i ile)
+    private RSACipher rsaForDecrypt; // Çözme için (kendi private key'im ile)
+
     public ClientGUI() {
         this.client = new ChatClient();
+
+        // RSA key pair'i başlangıçta oluştur
+        this.myRSA = new RSACipher();
+        this.rsaForDecrypt = new RSACipher(myRSA.getPublicKey(), myRSA.getPrivateKey());
+
         initializeGUI();
         updateAlgorithm();
     }
@@ -343,8 +355,14 @@ public class ClientGUI extends JFrame {
         new Thread(() -> {
             try {
                 client.connect("127.0.0.1", port);
+
+                // Bağlantı kurulduğunda RSA public key'i gönder
+                String myPublicKeyBase64 = myRSA.getPublicKeyBase64();
+                client.sendMessage("RSA_PUBKEY:" + myPublicKeyBase64);
+
                 SwingUtilities.invokeLater(() -> {
                     appendMessage("✅ Sunucuya bağlandı: localhost:" + port, SUCCESS);
+                    System.out.println("[LOG] RSA public key gönderildi.");
                     connectButton.setEnabled(false);
                 });
             } catch (Exception ex) {
@@ -376,15 +394,42 @@ public class ClientGUI extends JFrame {
                             break;
                         }
 
-                        if (line.startsWith("FILE:")) {
+                        if (line.startsWith("RSA_PUBKEY:")) {
+                            // Karşı tarafın public key'ini al
+                            String peerKeyBase64 = line.substring("RSA_PUBKEY:".length());
+                            try {
+                                peerPublicKey = RSACipher.decodePublicKey(peerKeyBase64);
+                                rsaForEncrypt = new RSACipher(peerPublicKey);
+                                System.out.println("[LOG] Karşı tarafın RSA public key'i alındı. RSA şifreleme hazır!");
+                            } catch (Exception e) {
+                                SwingUtilities.invokeLater(() -> {
+                                    appendMessage("❌ RSA public key decode hatası: " + e.getMessage(), ACCENT);
+                                });
+                            }
+                        } else if (line.startsWith("FILE:")) {
                             String[] parts = line.split(":", 4);
                             if (parts.length == 4) {
                                 handleIncomingFile(parts[1], parts[2], parts[3]);
                             }
                         } else {
                             final String msg = line;
+                            // RSA şifreli mesaj mı kontrol et ve çöz
+                            String decryptedMsg = msg;
+                            String prefix = "";
+                            if (rsaForDecrypt != null && msg.length() > 100) {
+                                // RSA şifreli mesaj olabilir - çözmeyi dene
+                                try {
+                                    decryptedMsg = rsaForDecrypt.decrypt(msg);
+                                    prefix = "🔓 [RSA Çözüldü] ";
+                                } catch (Exception e) {
+                                    // RSA ile çözülemedi - normal mesaj olarak göster
+                                    prefix = "";
+                                    decryptedMsg = msg;
+                                }
+                            }
+                            final String displayMsg = prefix + decryptedMsg;
                             SwingUtilities.invokeLater(() -> {
-                                appendMessage("📩 [Gelen] " + msg, TEXT_PRIMARY);
+                                appendMessage("📩 [Gelen] " + displayMsg, TEXT_PRIMARY);
                             });
                         }
                     } catch (java.net.SocketTimeoutException ste) {
@@ -420,9 +465,16 @@ public class ClientGUI extends JFrame {
         updateAlgorithm();
         String base64 = encryptedBase64;
 
-        if (selectedAlgorithm != null) {
+        // RSA seçili ise rsaForDecrypt kullan, diğerleri için selectedAlgorithm
+        EncryptionAlgorithm decryptAlgo = selectedAlgorithm;
+        String selected = (String) encryptionSelect.getSelectedItem();
+        if ("RSA".equals(selected) && rsaForDecrypt != null) {
+            decryptAlgo = rsaForDecrypt;
+        }
+
+        if (decryptAlgo != null) {
             try {
-                base64 = selectedAlgorithm.decrypt(encryptedBase64);
+                base64 = decryptAlgo.decrypt(encryptedBase64);
             } catch (Exception ex) {
                 appendMessage("❌ Dosya şifresi çözülemedi: " + ex.getMessage(), ACCENT);
                 return;
@@ -479,7 +531,11 @@ public class ClientGUI extends JFrame {
                     selectedAlgorithm = new ManualDES(key);
                     break;
                 case "RSA":
-                    selectedAlgorithm = new RSACipher();
+                    if (rsaForEncrypt == null) {
+                        throw new Exception(
+                                "RSA için önce karşı tarafın public key'i alınmalı! Bağlantı sonrası bekleyin.");
+                    }
+                    selectedAlgorithm = rsaForEncrypt;
                     break;
                 case "AffineCipher":
                     if (!key.contains(","))

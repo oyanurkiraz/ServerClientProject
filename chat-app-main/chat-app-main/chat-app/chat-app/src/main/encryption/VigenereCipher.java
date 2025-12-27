@@ -1,5 +1,8 @@
 package main.encryption;
 
+/**
+ * Vigenere Şifreleme - İngilizce alfabe (26 harf: A-Z)
+ */
 public class VigenereCipher implements EncryptionAlgorithm {
     private final String key;
 
@@ -9,20 +12,17 @@ public class VigenereCipher implements EncryptionAlgorithm {
 
     @Override
     public String encrypt(String plainText) {
-        plainText = plainText.toUpperCase(); 
         StringBuilder result = new StringBuilder();
         int keyIndex = 0;
 
-        for (int i = 0; i < plainText.length(); i++) {
-            char ch = plainText.charAt(i);
-
-            if (Character.isLetter(ch)) { 
-                char base = 'A';
-                int shift = key.charAt(keyIndex % key.length()) - base; 
-                result.append((char) ((ch - base + shift) % 26 + base));
-                keyIndex++; 
+        for (char ch : plainText.toCharArray()) {
+            if (Character.isLetter(ch)) {
+                char base = Character.isUpperCase(ch) ? 'A' : 'a';
+                int shift = key.charAt(keyIndex % key.length()) - 'A';
+                result.append((char) ((Character.toUpperCase(ch) - 'A' + shift) % 26 + base));
+                keyIndex++;
             } else {
-                result.append(ch); 
+                result.append(ch);
             }
         }
 
@@ -31,17 +31,14 @@ public class VigenereCipher implements EncryptionAlgorithm {
 
     @Override
     public String decrypt(String cipherText) {
-        cipherText = cipherText.toUpperCase();
         StringBuilder result = new StringBuilder();
         int keyIndex = 0;
 
-        for (int i = 0; i < cipherText.length(); i++) {
-            char ch = cipherText.charAt(i);
-
+        for (char ch : cipherText.toCharArray()) {
             if (Character.isLetter(ch)) {
-                char base = 'A';
-                int shift = key.charAt(keyIndex % key.length()) - base;
-                result.append((char) ((ch - base - shift + 26) % 26 + base));
+                char base = Character.isUpperCase(ch) ? 'A' : 'a';
+                int shift = key.charAt(keyIndex % key.length()) - 'A';
+                result.append((char) ((Character.toUpperCase(ch) - 'A' - shift + 26) % 26 + base));
                 keyIndex++;
             } else {
                 result.append(ch);
